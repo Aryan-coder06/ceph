@@ -239,6 +239,11 @@
           <div class="ms-4 me-4 mt-0">
             <cd-dashboard-time-selector (selectedTime)="getPrometheusData($event)">
             </cd-dashboard-time-selector>
+            <cd-alert-panel *ngIf="utilizationMetricsUnavailable"
+                            type="info"
+                            class="mt-3"
+                            i18n>Cluster utilization metrics are currently unavailable. Check that Prometheus is configured and the mgr/prometheus module is active.</cd-alert-panel>
+            <ng-container *ngIf="!utilizationMetricsUnavailable">
             <ng-container *ngIf="totalCapacity">
               <cd-dashboard-area-chart chartTitle="Used Capacity (RAW)"
                                        [maxValue]="totalCapacity"
@@ -271,6 +276,7 @@
                                      [labelsArray]="['Recovery Throughput']"
                                      [dataArray]="[queriesResults.RECOVERYBYTES]">
             </cd-dashboard-area-chart>
+            </ng-container>
           </div>
         </cd-card>
       </div>

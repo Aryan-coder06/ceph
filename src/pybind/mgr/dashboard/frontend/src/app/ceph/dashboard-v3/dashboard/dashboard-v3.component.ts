@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 
 import _ from 'lodash';
 import { BehaviorSubject, EMPTY, Observable, Subject, Subscription, of } from 'rxjs';
-import { catchError, exhaustMap, switchMap, takeUntil } from 'rxjs/operators';
+import { catchError, exhaustMap, map, switchMap, takeUntil } from 'rxjs/operators';
 
 import { HealthService } from '~/app/shared/api/health.service';
 import { PrometheusService, PromqlGuageMetric } from '~/app/shared/api/prometheus.service';
@@ -72,6 +72,7 @@ export class DashboardV3Component extends PrometheusListHelper implements OnInit
   borderClass: string;
   alertType: string;
   alertClass = AlertClass;
+  utilizationMetricsUnavailable = false;
 
   queriesResults: Record<string, [number, string][]> = {
     USEDCAPACITY: [],
@@ -187,10 +188,54 @@ export class DashboardV3Component extends PrometheusListHelper implements OnInit
   public getPrometheusData(selectedTime: any) {
     this.prometheusService
       .getRangeQueriesData(selectedTime, UtilizationCardQueries, true)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((results) => {
-        this.queriesResults = results;
+      .pipe(
+        map((results) => ({
+          results,
+          unavailable: false
+        })),
+        takeUntil(this.destroy$),
+        catchError(() => {
+          return of({
+            results: this.getEmptyUtilizationResults(),
+            unavailable: true
+          });
+        })
+      )
+      .subscribe(({ results, unavailable }) => {
+        this.utilizationMetricsUnavailable = unavailable;
+        this.queriesResults = unavailable
+          ? this.getEmptyUtilizationResults()
+          : this.normalizeUtilizationResults(results, selectedTime?.end);
       });
+  }
+
+  private getEmptyUtilizationResults(): Record<string, [number, string][]> {
+    return {
+      USEDCAPACITY: [],
+      IPS: [],
+      OPS: [],
+      READLATENCY: [],
+      WRITELATENCY: [],
+      READCLIENTTHROUGHPUT: [],
+      WRITECLIENTTHROUGHPUT: [],
+      RECOVERYBYTES: [],
+      READIOPS: [],
+      WRITEIOPS: []
+    };
+  }
+
+  private normalizeUtilizationResults(
+    results: Record<string, [number, string][]>,
+    timestamp?: number
+  ): Record<string, [number, string][]> {
+    const normalizedResults = this.getEmptyUtilizationResults();
+    const zeroPoint: [number, string][] = [[timestamp || Math.floor(Date.now() / 1000), '0']];
+
+    Object.keys(normalizedResults).forEach((key) => {
+      normalizedResults[key] = results?.[key]?.length ? results[key] : zeroPoint;
+    });
+
+    return normalizedResults;
   }
 
   getCapacityQueryValues(data: PromqlGuageMetric['result']) {

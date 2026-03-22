@@ -6,7 +6,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 
 import _ from 'lodash';
 import { ToastrModule } from 'ngx-toastr';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 
 import { HealthService } from '~/app/shared/api/health.service';
 import { PrometheusService } from '~/app/shared/api/prometheus.service';
@@ -346,6 +346,40 @@ describe('Dashbord Component', () => {
     const clusterStatusCard = fixture.debugElement.query(By.css('cd-card[cardTitle="Status"]'));
     const clickableContent = clusterStatusCard.query(By.css('.lead.text-primary'));
     expect(clickableContent).not.toBeNull();
+  });
+
+  it('should normalize empty cluster utilization query results to zero-valued points', () => {
+    spyOn(TestBed.inject(PrometheusService), 'getRangeQueriesData').and.returnValue(
+      of({
+        USEDCAPACITY: [],
+        IPS: [],
+        OPS: [],
+        READLATENCY: [],
+        WRITELATENCY: [],
+        READCLIENTTHROUGHPUT: [],
+        WRITECLIENTTHROUGHPUT: [],
+        RECOVERYBYTES: [],
+        READIOPS: [],
+        WRITEIOPS: []
+      })
+    );
+
+    component.getPrometheusData({ start: 1000, end: 2000, step: 14 });
+
+    expect(component.utilizationMetricsUnavailable).toBe(false);
+    expect(component.queriesResults.USEDCAPACITY).toEqual([[2000, '0']]);
+    expect(component.queriesResults.READIOPS).toEqual([[2000, '0']]);
+    expect(component.queriesResults.RECOVERYBYTES).toEqual([[2000, '0']]);
+  });
+
+  it('should set cluster utilization unavailable state when Prometheus range queries fail', () => {
+    spyOn(TestBed.inject(PrometheusService), 'getRangeQueriesData').and.returnValue(
+      throwError(() => new Error('prometheus unavailable'))
+    );
+
+    component.getPrometheusData({ start: 1000, end: 2000, step: 14 });
+
+    expect(component.utilizationMetricsUnavailable).toBe(true);
   });
 
   describe('features disabled', () => {
